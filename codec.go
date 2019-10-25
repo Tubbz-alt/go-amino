@@ -74,7 +74,6 @@ type InterfaceOptions struct {
 }
 
 type ConcreteInfo struct {
-
 	// These fields are only set when registered (as implementing an interface).
 	Registered       bool // Registered with RegisterConcrete().
 	PointerPreferred bool // Deserialize to pointer type if possible.
@@ -128,13 +127,15 @@ type FieldOptions struct {
 // Codec
 
 type Codec struct {
-	mtx              sync.RWMutex
-	sealed           bool
-	typeInfos        map[reflect.Type]*TypeInfo
-	interfaceInfos   []*TypeInfo
-	concreteInfos    []*TypeInfo
-	disfixToTypeInfo map[DisfixBytes]*TypeInfo
-	nameToTypeInfo   map[string]*TypeInfo
+	mtx               sync.RWMutex
+	sealed            bool
+	typeInfos         map[reflect.Type]*TypeInfo
+	interfaceInfos    []*TypeInfo
+	concreteInfos     []*TypeInfo
+	disfixToTypeInfo  map[DisfixBytes]*TypeInfo
+	nameToTypeInfo    map[string]*TypeInfo
+	reflectConcretes  map[string]reflect.Type
+	reflectInterfaces []reflect.Type
 }
 
 func NewCodec() *Codec {
@@ -143,6 +144,7 @@ func NewCodec() *Codec {
 		typeInfos:        make(map[reflect.Type]*TypeInfo),
 		disfixToTypeInfo: make(map[DisfixBytes]*TypeInfo),
 		nameToTypeInfo:   make(map[string]*TypeInfo),
+		reflectConcretes: make(map[string]reflect.Type),
 	}
 	return cdc
 }
@@ -174,6 +176,7 @@ func (cdc *Codec) RegisterInterface(ptr interface{}, iopts *InterfaceOptions) {
 			panic(err)
 		}
 		cdc.setTypeInfoNolock(info)
+		cdc.reflectInterfaces = append(cdc.reflectInterfaces, rt)
 	}()
 	/*
 		NOTE: The above func block is a defensive pattern.
@@ -239,7 +242,16 @@ func (cdc *Codec) RegisterConcrete(o interface{}, name string, copts *ConcreteOp
 
 		cdc.addCheckConflictsWithConcreteNolock(info)
 		cdc.setTypeInfoNolock(info)
+		cdc.reflectConcretes[name] = rt
 	}()
+}
+
+func (cdc *Codec) GetInterfaceTypes() []reflect.Type {
+	return cdc.reflectInterfaces
+}
+
+func (cdc *Codec) GetConcreteTypes() map[string]reflect.Type {
+	return cdc.reflectConcretes
 }
 
 func (cdc *Codec) Seal() *Codec {
